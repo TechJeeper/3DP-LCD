@@ -1,0 +1,59 @@
+{
+  "name": "3dp-lcd",
+  "author": "caffeinegamer",
+  "version": "1.0.0",
+  "keywords": ["pebble-app", "watchface", "3d-printing", "marlin", "lcd"],
+  "private": true,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "3DP LCD",
+    "uuid": "04b94ae4-e01c-40c6-b336-e427d6991129",
+    "sdkVersion": "3",
+    "enableMultiJS": false,
+    "targetPlatforms": ["emery", "basalt", "diorite", "flint"],
+    "watchapp": {
+      "watchface": true
+    },
+    "capabilities": [],
+    "resources": {
+      "media": [
+        {
+          "type": "bitmap",
+          "name": "IMAGE_MENU_ICON",
+          "file": "images/menu_icon.png",
+          "menuIcon": true
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_NOZZLE",
+          "file": "images/nozzle.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_BED",
+          "file": "images/bed.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_FAN_0",
+          "file": "images/fan_0.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_FAN_1",
+          "file": "images/fan_1.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_FAN_2",
+          "file": "images/fan_2.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_FAN_3",
+          "file": "images/fan_3.png"
+        }
+      ]
+    }
+  }
+}
