@@ -7,7 +7,7 @@ root = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else '.')
 os.makedirs(os.path.join(root, 'dist'), exist_ok=True)
 out = os.path.join(root, 'dist', '3DP-LCD-cloudpebble.zip')
 with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
-    for item in ('package.json', 'wscript', 'resources', 'src'):
+    for item in ('package.json', 'wscript', 'resources', 'src', 'config'):
         path = os.path.join(root, item)
         if os.path.isfile(path):
             z.write(path, '3DP-LCD/' + item)

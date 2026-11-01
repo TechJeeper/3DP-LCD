@@ -1,5 +1,6 @@
 #include <pebble.h>
 #include "face.h"
+#include "settings.h"
 
 static Window *s_window;
 
@@ -16,6 +17,8 @@ static void window_unload(Window *window) {
 }
 
 static void init(void) {
+  settings_init();
+
   s_window = window_create();
   window_set_window_handlers(s_window, (WindowHandlers){
     .load = window_load,
@@ -28,6 +31,7 @@ static void init(void) {
 static void deinit(void) {
   tick_timer_service_unsubscribe();
   window_destroy(s_window);
+  settings_deinit();
 }
 
 int main(void) {

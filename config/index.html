@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>3DP LCD settings</title>
+<style>
+:root {
+  --bg: #0a0c14;
+  --surface: #151a28;
+  --field: #1d2436;
+  --text: #e8eefc;
+  --muted: #8b95ab;
+  --line: rgba(255,255,255,0.08);
+  --accent: #55aaff;
+  --accent-ink: #001726;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body {
+  font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  padding: env(safe-area-inset-top) 16px calc(96px + env(safe-area-inset-bottom));
+  max-width: 520px; margin: 0 auto;
+}
+h1 { margin: 24px 0 4px; font-size: 24px; letter-spacing: -0.02em; }
+.sub { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
+h2 {
+  margin: 22px 0 8px; font-size: 12px; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden;
+}
+.row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 16px;
+}
+.row + .row { border-top: 1px solid var(--line); }
+.row-text { flex: 1; min-width: 0; }
+.row-text small { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }
+select, input[type="color"] {
+  font: inherit; color: var(--text); background: var(--field);
+  border: 1px solid var(--line); border-radius: 10px;
+}
+select { padding: 8px 10px; max-width: 160px; }
+input[type="color"] {
+  width: 44px; height: 34px; padding: 2px; cursor: pointer;
+}
+.switch { position: relative; flex: none; width: 50px; height: 30px; }
+.switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+.switch span {
+  position: absolute; inset: 0; border-radius: 30px; background: var(--field);
+  border: 1px solid var(--line); transition: 0.2s;
+}
+.switch span::after {
+  content: ""; position: absolute; width: 24px; height: 24px; border-radius: 50%;
+  top: 2px; left: 2px; background: #fff; transition: 0.2s;
+}
+.switch input:checked + span { background: var(--accent); border-color: var(--accent); }
+.switch input:checked + span::after { transform: translateX(20px); }
+.bar {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: linear-gradient(transparent, var(--bg) 30%);
+}
+.save {
+  width: 100%; max-width: 488px; margin: 0 auto; display: block;
+  padding: 14px; border: 0; border-radius: 14px; font: inherit; font-weight: 700;
+  background: var(--accent); color: var(--accent-ink); cursor: pointer;
+}
+.color-only.hidden { display: none; }
+</style>
+</head>
+<body>
+  <h1>3DP LCD</h1>
+  <p class="sub">Nozzle = hour · Bed = minute · Progress = day</p>
+
+  <h2>Time</h2>
+  <div class="card">
+    <div class="row">
+      <div class="row-text">Hour format</div>
+      <select id="HourMode">
+        <option value="0">System</option>
+        <option value="1">12-hour</option>
+        <option value="2">24-hour</option>
+      </select>
+    </div>
+  </div>
+
+  <h2>Display</h2>
+  <div class="card">
+    <div class="row">
+      <div class="row-text">Day progress bar</div>
+      <label class="switch"><input type="checkbox" id="ShowProgress" checked><span></span></label>
+    </div>
+    <div class="row">
+      <div class="row-text">XYZ line<small>Month / day / seconds</small></div>
+      <label class="switch"><input type="checkbox" id="ShowXYZ" checked><span></span></label>
+    </div>
+    <div class="row">
+      <div class="row-text">Remaining + status</div>
+      <label class="switch"><input type="checkbox" id="ShowRemaining" checked><span></span></label>
+    </div>
+    <div class="row">
+      <div class="row-text">Weekday .GCO</div>
+      <label class="switch"><input type="checkbox" id="ShowWeekday" checked><span></span></label>
+    </div>
+    <div class="row">
+      <div class="row-text">Spinning fan</div>
+      <label class="switch"><input type="checkbox" id="FanSpin" checked><span></span></label>
+    </div>
+    <div class="row">
+      <div class="row-text">Show F100%</div>
+      <label class="switch"><input type="checkbox" id="ShowFeedrate" checked><span></span></label>
+    </div>
+  </div>
+
+  <div class="color-only" id="colorSection">
+    <h2>Colors</h2>
+    <div class="card">
+      <div class="row">
+        <div class="row-text">Background</div>
+        <input type="color" id="BackgroundColor" value="#000055">
+      </div>
+      <div class="row">
+        <div class="row-text">LCD panel</div>
+        <input type="color" id="PanelColor" value="#0000aa">
+      </div>
+      <div class="row">
+        <div class="row-text">Primary text</div>
+        <input type="color" id="TextColor" value="#ffffff">
+      </div>
+      <div class="row">
+        <div class="row-text">Labels / accents</div>
+        <input type="color" id="AccentColor" value="#55aaff">
+      </div>
+      <div class="row">
+        <div class="row-text">Progress bar fill</div>
+        <input type="color" id="BarColor" value="#ffffff">
+      </div>
+    </div>
+  </div>
+
+  <div class="bar">
+    <button class="save" id="save" type="button">Save</button>
+  </div>
+
+<script>
+var RETURN_TO = '__RETURN_TO__';
+var state = __STATE__;
+
+function $(id) { return document.getElementById(id); }
+
+function hexToInt(hex) {
+  return parseInt(String(hex).replace('#', ''), 16);
+}
+
+function intToHex(n) {
+  var h = (n >>> 0).toString(16);
+  while (h.length < 6) h = '0' + h;
+  return '#' + h.slice(-6);
+}
+
+function load() {
+  if (!state) state = {};
+  if (state.color === false) {
+    document.getElementById('colorSection').classList.add('hidden');
+  }
+  $('HourMode').value = String(state.HourMode != null ? state.HourMode : 0);
+  ['ShowProgress','ShowXYZ','ShowRemaining','ShowWeekday','FanSpin','ShowFeedrate'].forEach(function (k) {
+    $(k).checked = state[k] !== false;
+  });
+  if (state.BackgroundColor != null) $('BackgroundColor').value = intToHex(state.BackgroundColor);
+  if (state.PanelColor != null) $('PanelColor').value = intToHex(state.PanelColor);
+  if (state.TextColor != null) $('TextColor').value = intToHex(state.TextColor);
+  if (state.AccentColor != null) $('AccentColor').value = intToHex(state.AccentColor);
+  if (state.BarColor != null) $('BarColor').value = intToHex(state.BarColor);
+}
+
+function collect() {
+  return {
+    HourMode: parseInt($('HourMode').value, 10),
+    ShowProgress: $('ShowProgress').checked,
+    ShowXYZ: $('ShowXYZ').checked,
+    ShowRemaining: $('ShowRemaining').checked,
+    ShowWeekday: $('ShowWeekday').checked,
+    FanSpin: $('FanSpin').checked,
+    ShowFeedrate: $('ShowFeedrate').checked,
+    BackgroundColor: hexToInt($('BackgroundColor').value),
+    PanelColor: hexToInt($('PanelColor').value),
+    TextColor: hexToInt($('TextColor').value),
+    AccentColor: hexToInt($('AccentColor').value),
+    BarColor: hexToInt($('BarColor').value)
+  };
+}
+
+$('save').onclick = function () {
+  var payload = encodeURIComponent(JSON.stringify(collect()));
+  window.location.href = RETURN_TO + payload;
+};
+
+load();
+</script>
+</body>
+</html>

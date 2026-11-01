@@ -1,9 +1,9 @@
 #include "face.h"
+#include "settings.h"
 
 #define FRAME_MS 120
 #define FAN_FRAMES 4
 #define PANEL_PAD 8
-#define ROW_GAP 4
 
 static Window *s_window;
 static Layer *s_layer;
@@ -22,43 +22,32 @@ static GBitmap *s_bmp_bed;
 static GBitmap *s_bmp_fan[FAN_FRAMES];
 
 static GColor color_bg(void) {
-#if defined(PBL_COLOR)
-  return GColorOxfordBlue;
-#else
-  return GColorBlack;
-#endif
+  return settings_get()->bg;
 }
 
 static GColor color_panel(void) {
-#if defined(PBL_COLOR)
-  return GColorDukeBlue;
-#else
-  return GColorBlack;
-#endif
+  return settings_get()->panel;
 }
 
 static GColor color_fg(void) {
-  return GColorWhite;
+  return settings_get()->fg;
 }
 
 static GColor color_dim(void) {
-#if defined(PBL_COLOR)
-  return GColorPictonBlue;
-#else
-  return GColorWhite;
-#endif
+  return settings_get()->accent;
 }
 
 static GColor color_bar(void) {
-#if defined(PBL_COLOR)
-  return GColorWhite;
-#else
-  return GColorWhite;
-#endif
+  return settings_get()->bar;
 }
 
 static int display_hour(int hour) {
-  if (!clock_is_24h_style()) {
+  uint8_t mode = settings_get()->hour_mode;
+  bool use_12h = (mode == 1) || (mode == 0 && !clock_is_24h_style());
+  if (mode == 2) {
+    use_12h = false;
+  }
+  if (use_12h) {
     hour = hour % 12;
     if (hour == 0) {
       hour = 12;
@@ -88,7 +77,6 @@ static void draw_panel_frame(GContext *ctx, GRect panel) {
   graphics_context_set_stroke_width(ctx, 2);
   graphics_draw_round_rect(ctx, panel, 4);
 
-  // Bezel highlight — cheap “LCD glass” cue
   graphics_context_set_stroke_color(ctx, color_fg());
   graphics_context_set_stroke_width(ctx, 1);
   graphics_draw_line(ctx,
@@ -176,29 +164,27 @@ static void draw_temp_row(GContext *ctx, GRect content, int y, GBitmap *icon,
 }
 
 static void draw_frame(Layer *layer, GContext *ctx) {
+  const FaceSettings *cfg = settings_get();
   GRect bounds = layer_get_bounds(layer);
 
   graphics_context_set_fill_color(ctx, color_bg());
   graphics_fill_rect(ctx, bounds, 0, GCornerNone);
 
-  // LCD panel sized to the watch, with a dark bezel margin outside.
   int margin = bounds.size.w >= 180 ? 10 : 6;
   GRect panel = GRect(margin, margin, bounds.size.w - margin * 2, bounds.size.h - margin * 2);
   draw_panel_frame(ctx, panel);
 
   int pad = bounds.size.h < 180 ? 6 : PANEL_PAD;
-  // Keep clear of the 2px panel stroke — white-on-white looks like a clipped day name.
   int pad_bottom = pad + 10;
   GRect content = GRect(panel.origin.x + pad, panel.origin.y + pad,
                         panel.size.w - pad * 2, panel.size.h - pad - pad_bottom);
 
-  // Reserve a bottom strip for the weekday .GCO so upper rows can never cover it.
   const int file_h = 22;
   const int file_gap = 4;
+  bool reserve_file = cfg->show_weekday;
   int file_y = content.origin.y + content.size.h - file_h;
-  int body_bottom = file_y - file_gap;
+  int body_bottom = reserve_file ? (file_y - file_gap) : (content.origin.y + content.size.h);
 
-  // Compact screens (Basalt/Diorite/Flint ~168px): smaller temp font so rows clear the bar.
   bool compact = content.size.h < 190;
   GFont value_font = fonts_get_system_font(
       compact ? FONT_KEY_GOTHIC_18_BOLD : FONT_KEY_GOTHIC_24_BOLD);
@@ -219,37 +205,39 @@ static void draw_frame(Layer *layer, GContext *ctx) {
 
   char bed_line[24];
   snprintf(bed_line, sizeof(bed_line), "%02d/%02d C", s_minute, s_minute);
-  draw_temp_row(ctx, content, y, s_bmp_bed, "Bed", bed_line, "F100%",
+  const char *feed = cfg->show_feedrate ? "F100%" : NULL;
+  draw_temp_row(ctx, content, y, s_bmp_bed, "Bed", bed_line, feed,
                 value_font, value_h, icon_s, fan_s, false);
   y += temp_row_h + gap;
 
-  // --- Progress bar = day elapsed ---
-  int bar_h = compact ? 11 : 14;
-  int pct_w = 36;
-  GRect bar = GRect(content.origin.x, y, content.size.w - pct_w - 4, bar_h);
-  draw_progress_bar(ctx, bar, pct);
+  if (cfg->show_progress) {
+    int bar_h = compact ? 11 : 14;
+    int pct_w = 36;
+    GRect bar = GRect(content.origin.x, y, content.size.w - pct_w - 4, bar_h);
+    draw_progress_bar(ctx, bar, pct);
 
-  char pct_line[8];
-  snprintf(pct_line, sizeof(pct_line), "%d%%", pct);
-  graphics_context_set_text_color(ctx, color_fg());
-  graphics_draw_text(ctx, pct_line, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
-      GRect(bar.origin.x + bar.size.w + 4, y - 3, pct_w, 20),
-      GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
+    char pct_line[8];
+    snprintf(pct_line, sizeof(pct_line), "%d%%", pct);
+    graphics_context_set_text_color(ctx, color_fg());
+    graphics_draw_text(ctx, pct_line, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
+        GRect(bar.origin.x + bar.size.w + 4, y - 3, pct_w, 20),
+        GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
 
-  y += bar_h + gap;
+    y += bar_h + gap;
+  }
 
-  // --- XYZ: month / day / seconds ---
-  char xyz_line[32];
-  snprintf(xyz_line, sizeof(xyz_line), "X:%02d.00 Y:%02d.00 Z:%02d",
-           s_month, s_mday, s_second);
-  graphics_context_set_text_color(ctx, color_fg());
-  graphics_draw_text(ctx, xyz_line, fonts_get_system_font(FONT_KEY_GOTHIC_14),
-      GRect(content.origin.x, y, content.size.w, 16),
-      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-  y += 15 + gap;
+  if (cfg->show_xyz && y + 16 <= body_bottom) {
+    char xyz_line[32];
+    snprintf(xyz_line, sizeof(xyz_line), "X:%02d.00 Y:%02d.00 Z:%02d",
+             s_month, s_mday, s_second);
+    graphics_context_set_text_color(ctx, color_fg());
+    graphics_draw_text(ctx, xyz_line, fonts_get_system_font(FONT_KEY_GOTHIC_14),
+        GRect(content.origin.x, y, content.size.w, 16),
+        GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    y += 15 + gap;
+  }
 
-  // --- Remaining + status (only if it still fits above the reserved file strip) ---
-  if (y + 16 <= body_bottom) {
+  if (cfg->show_remaining && y + 16 <= body_bottom) {
     int remain_mins = (24 * 60) - (s_hour * 60 + s_minute);
     if (remain_mins < 0) {
       remain_mins = 0;
@@ -269,13 +257,14 @@ static void draw_frame(Layer *layer, GContext *ctx) {
         GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
   }
 
-  // --- Weekday "print file" in its reserved bottom strip ---
-  char file_line[28];
-  snprintf(file_line, sizeof(file_line), "%s.GCO", weekday_name(s_wday));
-  graphics_context_set_text_color(ctx, color_fg());
-  graphics_draw_text(ctx, file_line, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
-      GRect(content.origin.x, file_y, content.size.w, file_h),
-      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+  if (cfg->show_weekday) {
+    char file_line[28];
+    snprintf(file_line, sizeof(file_line), "%s.GCO", weekday_name(s_wday));
+    graphics_context_set_text_color(ctx, color_fg());
+    graphics_draw_text(ctx, file_line, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
+        GRect(content.origin.x, file_y, content.size.w, file_h),
+        GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+  }
 }
 
 static void schedule_frame(void);
@@ -293,7 +282,11 @@ static void sync_clock(void) {
 
 static void on_frame(void *context) {
   s_timer = NULL;
-  s_fan_frame = (s_fan_frame + 1) % FAN_FRAMES;
+  if (settings_get()->fan_spin) {
+    s_fan_frame = (s_fan_frame + 1) % FAN_FRAMES;
+  } else {
+    s_fan_frame = 0;
+  }
   sync_clock();
   layer_mark_dirty(s_layer);
   schedule_frame();
@@ -308,6 +301,15 @@ static void schedule_frame(void) {
 void face_tick(void) {
   sync_clock();
   layer_mark_dirty(s_layer);
+}
+
+void face_settings_changed(void) {
+  if (s_window) {
+    window_set_background_color(s_window, color_bg());
+  }
+  if (s_layer) {
+    layer_mark_dirty(s_layer);
+  }
 }
 
 void face_init(Window *window) {

@@ -8,11 +8,15 @@ controller LCD (Marlin / RepRap status screen).
 - **Progress bar** = how much of the day has passed
 - **Fan** icon spins in the corner
 
+Open the watchface settings in the Pebble app to change hour format, toggle
+XYZ / remaining / weekday `.GCO` / fan / feedrate, and (on color watches) pick
+background, panel, text, accent, and progress-bar colors.
+
 ## Platforms
 
 Pebble Time 2 (Emery), Pebble Time (Basalt), Pebble 2 / Time Round-class
-(Diorite), and Pebble 2 Duo (Flint). Color watches use Oxford/Duke blue with
-white text; B&W watches use white on black.
+(Diorite), and Pebble 2 Duo (Flint). Default colors are Oxford/Duke blue with
+white text; B&W watches stay white on black.
 
 ## Build and install
 
