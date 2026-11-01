@@ -1,10 +1,12 @@
 {
   "name": "3dp-lcd",
   "author": "caffeinegamer",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "keywords": ["pebble-app", "watchface", "3d-printing", "marlin", "lcd"],
   "private": true,
-  "dependencies": {},
+  "dependencies": {
+    "@rebble/clay": "^1.1.0"
+  },
   "pebble": {
     "displayName": "3DP LCD",
     "uuid": "04b94ae4-e01c-40c6-b336-e427d6991129",

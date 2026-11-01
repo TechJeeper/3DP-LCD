@@ -8,9 +8,10 @@ controller LCD (Marlin / RepRap status screen).
 - **Progress bar** = how much of the day has passed
 - **Fan** icon spins in the corner
 
-Open the watchface settings in the Pebble app to change hour format, toggle
-XYZ / remaining / weekday `.GCO` / fan / feedrate, and (on color watches) pick
-background, panel, text, accent, and progress-bar colors.
+Open the watchface settings (gear) in the Pebble app to change hour format,
+toggle XYZ / remaining / weekday `.GCO` / fan / feedrate, and (on color watches)
+pick background, panel, text, accent, and progress-bar colors. Settings use
+Clay so the page matches the normal Pebble config UI.
 
 ## Platforms
 
