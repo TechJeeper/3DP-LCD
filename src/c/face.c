@@ -12,6 +12,9 @@ static AppTimer *s_timer;
 static int s_hour;
 static int s_minute;
 static int s_second;
+static int s_month;   // 1..12
+static int s_mday;    // 1..31
+static int s_wday;    // 0=Sun
 static int s_fan_frame;
 
 static GBitmap *s_bmp_nozzle;
@@ -126,6 +129,16 @@ static void draw_progress_bar(GContext *ctx, GRect bar, int pct) {
   }
 }
 
+static const char *weekday_name(int wday) {
+  static const char *names[7] = {
+    "SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"
+  };
+  if (wday < 0 || wday > 6) {
+    return "TODAY";
+  }
+  return names[wday];
+}
+
 static void draw_frame(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
 
@@ -143,6 +156,8 @@ static void draw_frame(Layer *layer, GContext *ctx) {
   int icon_s = 16;
   int row_h = bounds.size.h >= 200 ? 28 : 24;
   int fan_s = 16;
+  int tall = bounds.size.h >= 200;
+  int gap = tall ? 10 : 6;
   int y = content.origin.y + 2;
   int hour = display_hour(s_hour);
   int pct = day_progress_pct();
@@ -166,7 +181,7 @@ static void draw_frame(Layer *layer, GContext *ctx) {
   draw_icon(ctx, s_bmp_fan[s_fan_frame % FAN_FRAMES],
       GPoint(content.origin.x + content.size.w - fan_s, y + 2));
 
-  y += row_h + ROW_GAP + 6;
+  y += row_h + gap;
 
   // --- Row 2: Bed = minute ---
   draw_icon(ctx, s_bmp_bed, GPoint(content.origin.x, y + (row_h - icon_s) / 2));
@@ -189,7 +204,7 @@ static void draw_frame(Layer *layer, GContext *ctx) {
       GRect(content.origin.x + content.size.w - 44, y + 12, 44, 16),
       GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
 
-  y += row_h + ROW_GAP + 10;
+  y += row_h + gap;
 
   // --- Progress bar = day elapsed ---
   int bar_h = 14;
@@ -204,28 +219,73 @@ static void draw_frame(Layer *layer, GContext *ctx) {
       GRect(bar.origin.x + bar.size.w + 4, y - 4, pct_w, 20),
       GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
 
-  y += bar_h + ROW_GAP + 8;
+  y += bar_h + gap;
 
-  // --- Status line ---
+  // --- XYZ: month / day / seconds (classic status-screen coords) ---
+  char xyz_line[32];
+  snprintf(xyz_line, sizeof(xyz_line), "X:%02d.00 Y:%02d.00 Z:%02d",
+           s_month, s_mday, s_second);
+  graphics_context_set_text_color(ctx, color_fg());
+  graphics_draw_text(ctx, xyz_line, fonts_get_system_font(FONT_KEY_GOTHIC_18),
+      GRect(content.origin.x, y - 2, content.size.w, 20),
+      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+
+  y += 20 + (tall ? 6 : 2);
+
+  // --- Remaining until midnight (Marlin "R" time) ---
+  int remain_mins = (24 * 60) - (s_hour * 60 + s_minute);
+  if (remain_mins < 0) {
+    remain_mins = 0;
+  }
+  char remain_line[24];
+  snprintf(remain_line, sizeof(remain_line), "R %02d:%02d",
+           remain_mins / 60, remain_mins % 60);
   graphics_context_set_text_color(ctx, color_dim());
+  graphics_draw_text(ctx, remain_line, fonts_get_system_font(FONT_KEY_GOTHIC_18),
+      GRect(content.origin.x, y - 2, content.size.w / 2, 20),
+      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+
   const char *status = "Printing...";
   if (pct >= 100 || (s_hour == 23 && s_minute >= 59)) {
     status = "Finish";
-  } else if (pct < 1 && s_hour == 0 && s_minute < 1) {
+  } else if (s_hour == 0 && s_minute < 1) {
     status = "Heating...";
   }
+  graphics_context_set_text_color(ctx, color_fg());
   graphics_draw_text(ctx, status, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
-      GRect(content.origin.x, y, content.size.w, 22),
-      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+      GRect(content.origin.x + content.size.w / 2, y - 2, content.size.w / 2, 20),
+      GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
 
-  (void)s_second;
+  // --- Filename pinned to the bottom of the panel ---
+  char file_line[28];
+  snprintf(file_line, sizeof(file_line), "%s.GCO", weekday_name(s_wday));
+  int file_y = content.origin.y + content.size.h - 22;
+  if (file_y < y + 18) {
+    file_y = y + 18;
+  }
+  graphics_context_set_text_color(ctx, color_dim());
+  graphics_draw_text(ctx, file_line, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
+      GRect(content.origin.x, file_y, content.size.w, 22),
+      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 }
 
 static void schedule_frame(void);
 
+static void sync_clock(void) {
+  time_t now = time(NULL);
+  struct tm *t = localtime(&now);
+  s_hour = t->tm_hour;
+  s_minute = t->tm_min;
+  s_second = t->tm_sec;
+  s_month = t->tm_mon + 1;
+  s_mday = t->tm_mday;
+  s_wday = t->tm_wday;
+}
+
 static void on_frame(void *context) {
   s_timer = NULL;
   s_fan_frame = (s_fan_frame + 1) % FAN_FRAMES;
+  sync_clock();
   layer_mark_dirty(s_layer);
   schedule_frame();
 }
@@ -237,11 +297,7 @@ static void schedule_frame(void) {
 }
 
 void face_tick(void) {
-  time_t now = time(NULL);
-  struct tm *t = localtime(&now);
-  s_hour = t->tm_hour;
-  s_minute = t->tm_min;
-  s_second = t->tm_sec;
+  sync_clock();
   layer_mark_dirty(s_layer);
 }
 
@@ -249,11 +305,7 @@ void face_init(Window *window) {
   s_window = window;
   window_set_background_color(window, color_bg());
 
-  time_t now = time(NULL);
-  struct tm *t = localtime(&now);
-  s_hour = t->tm_hour;
-  s_minute = t->tm_min;
-  s_second = t->tm_sec;
+  sync_clock();
   s_fan_frame = 0;
 
   s_bmp_nozzle = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_NOZZLE);
