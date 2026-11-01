@@ -187,8 +187,10 @@ static void draw_frame(Layer *layer, GContext *ctx) {
   draw_panel_frame(ctx, panel);
 
   int pad = bounds.size.h < 180 ? 6 : PANEL_PAD;
+  // Extra bottom inset so the .GCO line clears the panel stroke/bezel.
+  int pad_bottom = pad + (bounds.size.h < 180 ? 6 : 4);
   GRect content = GRect(panel.origin.x + pad, panel.origin.y + pad,
-                        panel.size.w - pad * 2, panel.size.h - pad * 2);
+                        panel.size.w - pad * 2, panel.size.h - pad - pad_bottom);
 
   // Compact screens (Basalt/Diorite/Flint ~168px): smaller temp font so rows clear the bar.
   bool compact = content.size.h < 190;
@@ -260,16 +262,17 @@ static void draw_frame(Layer *layer, GContext *ctx) {
       GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
   y += 16 + gap;
 
-  // --- Filename pinned to the bottom of the panel ---
+  // --- Filename pinned to the bottom of the content area ---
   char file_line[28];
   snprintf(file_line, sizeof(file_line), "%s.GCO", weekday_name(s_wday));
-  int file_y = content.origin.y + content.size.h - 20;
+  const int file_h = 24;
+  int file_y = content.origin.y + content.size.h - file_h;
   if (file_y < y) {
     file_y = y;
   }
   graphics_context_set_text_color(ctx, color_fg());
   graphics_draw_text(ctx, file_line, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
-      GRect(content.origin.x, file_y, content.size.w, 20),
+      GRect(content.origin.x, file_y, content.size.w, file_h),
       GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 }
 
