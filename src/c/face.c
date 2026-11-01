@@ -139,6 +139,42 @@ static const char *weekday_name(int wday) {
   return names[wday];
 }
 
+static void draw_temp_row(GContext *ctx, GRect content, int y, GBitmap *icon,
+                          const char *label, const char *value, const char *right,
+                          GFont value_font, int value_h, int icon_s, int fan_s,
+                          bool show_fan) {
+  int text_x = content.origin.x + icon_s + 4;
+  int text_w = content.size.w - icon_s - 4;
+  if (show_fan) {
+    text_w -= fan_s + 4;
+  } else if (right) {
+    text_w -= 44;
+  }
+
+  draw_icon(ctx, icon, GPoint(content.origin.x, y + 2));
+
+  graphics_context_set_text_color(ctx, color_dim());
+  graphics_draw_text(ctx, label, fonts_get_system_font(FONT_KEY_GOTHIC_14),
+      GRect(text_x, y - 1, text_w, 16),
+      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+
+  graphics_context_set_text_color(ctx, color_fg());
+  graphics_draw_text(ctx, value, value_font,
+      GRect(text_x, y + 12, text_w, value_h),
+      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+
+  if (show_fan) {
+    draw_icon(ctx, s_bmp_fan[s_fan_frame % FAN_FRAMES],
+        GPoint(content.origin.x + content.size.w - fan_s, y + 1));
+  }
+  if (right) {
+    graphics_context_set_text_color(ctx, color_dim());
+    graphics_draw_text(ctx, right, fonts_get_system_font(FONT_KEY_GOTHIC_14),
+        GRect(content.origin.x + content.size.w - 44, y + 14, 44, 16),
+        GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
+  }
+}
+
 static void draw_frame(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
 
@@ -150,64 +186,37 @@ static void draw_frame(Layer *layer, GContext *ctx) {
   GRect panel = GRect(margin, margin, bounds.size.w - margin * 2, bounds.size.h - margin * 2);
   draw_panel_frame(ctx, panel);
 
-  GRect content = GRect(panel.origin.x + PANEL_PAD, panel.origin.y + PANEL_PAD,
-                        panel.size.w - PANEL_PAD * 2, panel.size.h - PANEL_PAD * 2);
+  int pad = bounds.size.h < 180 ? 6 : PANEL_PAD;
+  GRect content = GRect(panel.origin.x + pad, panel.origin.y + pad,
+                        panel.size.w - pad * 2, panel.size.h - pad * 2);
 
+  // Compact screens (Basalt/Diorite/Flint ~168px): smaller temp font so rows clear the bar.
+  bool compact = content.size.h < 190;
+  GFont value_font = fonts_get_system_font(
+      compact ? FONT_KEY_GOTHIC_18_BOLD : FONT_KEY_GOTHIC_24_BOLD);
+  int value_h = compact ? 22 : 28;
+  int temp_row_h = 14 + value_h; // label + value, no overlap into next row
   int icon_s = 16;
-  int row_h = bounds.size.h >= 200 ? 28 : 24;
   int fan_s = 16;
-  int tall = bounds.size.h >= 200;
-  int gap = tall ? 10 : 6;
-  int y = content.origin.y + 2;
+  int gap = compact ? 4 : 8;
+  int y = content.origin.y;
   int hour = display_hour(s_hour);
   int pct = day_progress_pct();
 
-  // --- Row 1: Nozzle = hour ---
-  draw_icon(ctx, s_bmp_nozzle, GPoint(content.origin.x, y + (row_h - icon_s) / 2));
-
-  graphics_context_set_text_color(ctx, color_dim());
-  graphics_draw_text(ctx, "Nozzle", fonts_get_system_font(FONT_KEY_GOTHIC_14),
-      GRect(content.origin.x + icon_s + 4, y - 2, 56, 16),
-      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-
   char nozzle_line[24];
   snprintf(nozzle_line, sizeof(nozzle_line), "%02d/%02d C", hour, hour);
-  graphics_context_set_text_color(ctx, color_fg());
-  graphics_draw_text(ctx, nozzle_line, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD),
-      GRect(content.origin.x + icon_s + 4, y + 8, content.size.w - icon_s - fan_s - 12, 28),
-      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-
-  // Fan spins in the top-right corner of the LCD
-  draw_icon(ctx, s_bmp_fan[s_fan_frame % FAN_FRAMES],
-      GPoint(content.origin.x + content.size.w - fan_s, y + 2));
-
-  y += row_h + gap;
-
-  // --- Row 2: Bed = minute ---
-  draw_icon(ctx, s_bmp_bed, GPoint(content.origin.x, y + (row_h - icon_s) / 2));
-
-  graphics_context_set_text_color(ctx, color_dim());
-  graphics_draw_text(ctx, "Bed", fonts_get_system_font(FONT_KEY_GOTHIC_14),
-      GRect(content.origin.x + icon_s + 4, y - 2, 56, 16),
-      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+  draw_temp_row(ctx, content, y, s_bmp_nozzle, "Nozzle", nozzle_line, NULL,
+                value_font, value_h, icon_s, fan_s, true);
+  y += temp_row_h + gap;
 
   char bed_line[24];
   snprintf(bed_line, sizeof(bed_line), "%02d/%02d C", s_minute, s_minute);
-  graphics_context_set_text_color(ctx, color_fg());
-  graphics_draw_text(ctx, bed_line, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD),
-      GRect(content.origin.x + icon_s + 4, y + 8, content.size.w - icon_s - 8, 28),
-      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-
-  // Feedrate joke — always “100%” like an idle printer
-  graphics_context_set_text_color(ctx, color_dim());
-  graphics_draw_text(ctx, "F100%", fonts_get_system_font(FONT_KEY_GOTHIC_14),
-      GRect(content.origin.x + content.size.w - 44, y + 12, 44, 16),
-      GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
-
-  y += row_h + gap;
+  draw_temp_row(ctx, content, y, s_bmp_bed, "Bed", bed_line, "F100%",
+                value_font, value_h, icon_s, fan_s, false);
+  y += temp_row_h + gap;
 
   // --- Progress bar = day elapsed ---
-  int bar_h = 14;
+  int bar_h = compact ? 12 : 14;
   int pct_w = 36;
   GRect bar = GRect(content.origin.x, y, content.size.w - pct_w - 4, bar_h);
   draw_progress_bar(ctx, bar, pct);
@@ -221,51 +230,46 @@ static void draw_frame(Layer *layer, GContext *ctx) {
 
   y += bar_h + gap;
 
-  // --- XYZ: month / day / seconds (classic status-screen coords) ---
+  // --- XYZ: month / day / seconds ---
   char xyz_line[32];
   snprintf(xyz_line, sizeof(xyz_line), "X:%02d.00 Y:%02d.00 Z:%02d",
            s_month, s_mday, s_second);
   graphics_context_set_text_color(ctx, color_fg());
-  graphics_draw_text(ctx, xyz_line, fonts_get_system_font(FONT_KEY_GOTHIC_18),
-      GRect(content.origin.x, y - 2, content.size.w, 20),
+  graphics_draw_text(ctx, xyz_line, fonts_get_system_font(FONT_KEY_GOTHIC_14),
+      GRect(content.origin.x, y, content.size.w, 18),
       GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+  y += 16 + gap;
 
-  y += 20 + (tall ? 6 : 2);
-
-  // --- Remaining until midnight (Marlin "R" time) ---
+  // --- Remaining + status on one line (avoids "Printin..." clip) ---
   int remain_mins = (24 * 60) - (s_hour * 60 + s_minute);
   if (remain_mins < 0) {
     remain_mins = 0;
   }
-  char remain_line[24];
-  snprintf(remain_line, sizeof(remain_line), "R %02d:%02d",
-           remain_mins / 60, remain_mins % 60);
-  graphics_context_set_text_color(ctx, color_dim());
-  graphics_draw_text(ctx, remain_line, fonts_get_system_font(FONT_KEY_GOTHIC_18),
-      GRect(content.origin.x, y - 2, content.size.w / 2, 20),
-      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-
-  const char *status = "Printing...";
+  const char *status = "Printing";
   if (pct >= 100 || (s_hour == 23 && s_minute >= 59)) {
     status = "Finish";
   } else if (s_hour == 0 && s_minute < 1) {
-    status = "Heating...";
+    status = "Heating";
   }
-  graphics_context_set_text_color(ctx, color_fg());
-  graphics_draw_text(ctx, status, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
-      GRect(content.origin.x + content.size.w / 2, y - 2, content.size.w / 2, 20),
-      GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
+  char status_line[36];
+  snprintf(status_line, sizeof(status_line), "R %02d:%02d  %s",
+           remain_mins / 60, remain_mins % 60, status);
+  graphics_context_set_text_color(ctx, color_dim());
+  graphics_draw_text(ctx, status_line, fonts_get_system_font(FONT_KEY_GOTHIC_14),
+      GRect(content.origin.x, y, content.size.w, 18),
+      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+  y += 16 + gap;
 
   // --- Filename pinned to the bottom of the panel ---
   char file_line[28];
   snprintf(file_line, sizeof(file_line), "%s.GCO", weekday_name(s_wday));
-  int file_y = content.origin.y + content.size.h - 22;
-  if (file_y < y + 18) {
-    file_y = y + 18;
+  int file_y = content.origin.y + content.size.h - 20;
+  if (file_y < y) {
+    file_y = y;
   }
-  graphics_context_set_text_color(ctx, color_dim());
+  graphics_context_set_text_color(ctx, color_fg());
   graphics_draw_text(ctx, file_line, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
-      GRect(content.origin.x, file_y, content.size.w, 22),
+      GRect(content.origin.x, file_y, content.size.w, 20),
       GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 }
 
