@@ -192,15 +192,21 @@ static void draw_frame(Layer *layer, GContext *ctx) {
   GRect content = GRect(panel.origin.x + pad, panel.origin.y + pad,
                         panel.size.w - pad * 2, panel.size.h - pad - pad_bottom);
 
+  // Reserve a bottom strip for the weekday .GCO so upper rows can never cover it.
+  const int file_h = 22;
+  const int file_gap = 4;
+  int file_y = content.origin.y + content.size.h - file_h;
+  int body_bottom = file_y - file_gap;
+
   // Compact screens (Basalt/Diorite/Flint ~168px): smaller temp font so rows clear the bar.
   bool compact = content.size.h < 190;
   GFont value_font = fonts_get_system_font(
       compact ? FONT_KEY_GOTHIC_18_BOLD : FONT_KEY_GOTHIC_24_BOLD);
-  int value_h = compact ? 22 : 28;
-  int temp_row_h = 14 + value_h; // label + value, no overlap into next row
+  int value_h = compact ? 20 : 28;
+  int temp_row_h = 12 + value_h;
   int icon_s = 16;
   int fan_s = 16;
-  int gap = compact ? 4 : 8;
+  int gap = compact ? 3 : 8;
   int y = content.origin.y;
   int hour = display_hour(s_hour);
   int pct = day_progress_pct();
@@ -218,7 +224,7 @@ static void draw_frame(Layer *layer, GContext *ctx) {
   y += temp_row_h + gap;
 
   // --- Progress bar = day elapsed ---
-  int bar_h = compact ? 12 : 14;
+  int bar_h = compact ? 11 : 14;
   int pct_w = 36;
   GRect bar = GRect(content.origin.x, y, content.size.w - pct_w - 4, bar_h);
   draw_progress_bar(ctx, bar, pct);
@@ -227,7 +233,7 @@ static void draw_frame(Layer *layer, GContext *ctx) {
   snprintf(pct_line, sizeof(pct_line), "%d%%", pct);
   graphics_context_set_text_color(ctx, color_fg());
   graphics_draw_text(ctx, pct_line, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
-      GRect(bar.origin.x + bar.size.w + 4, y - 4, pct_w, 20),
+      GRect(bar.origin.x + bar.size.w + 4, y - 3, pct_w, 20),
       GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
 
   y += bar_h + gap;
@@ -238,43 +244,34 @@ static void draw_frame(Layer *layer, GContext *ctx) {
            s_month, s_mday, s_second);
   graphics_context_set_text_color(ctx, color_fg());
   graphics_draw_text(ctx, xyz_line, fonts_get_system_font(FONT_KEY_GOTHIC_14),
-      GRect(content.origin.x, y, content.size.w, 18),
+      GRect(content.origin.x, y, content.size.w, 16),
       GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-  y += 16 + gap;
+  y += 15 + gap;
 
-  // --- Remaining + status on one line (avoids "Printin..." clip) ---
-  int remain_mins = (24 * 60) - (s_hour * 60 + s_minute);
-  if (remain_mins < 0) {
-    remain_mins = 0;
+  // --- Remaining + status (only if it still fits above the reserved file strip) ---
+  if (y + 16 <= body_bottom) {
+    int remain_mins = (24 * 60) - (s_hour * 60 + s_minute);
+    if (remain_mins < 0) {
+      remain_mins = 0;
+    }
+    const char *status = "Printing";
+    if (pct >= 100 || (s_hour == 23 && s_minute >= 59)) {
+      status = "Finish";
+    } else if (s_hour == 0 && s_minute < 1) {
+      status = "Heating";
+    }
+    char status_line[36];
+    snprintf(status_line, sizeof(status_line), "R %02d:%02d  %s",
+             remain_mins / 60, remain_mins % 60, status);
+    graphics_context_set_text_color(ctx, color_dim());
+    graphics_draw_text(ctx, status_line, fonts_get_system_font(FONT_KEY_GOTHIC_14),
+        GRect(content.origin.x, y, content.size.w, 16),
+        GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
   }
-  const char *status = "Printing";
-  if (pct >= 100 || (s_hour == 23 && s_minute >= 59)) {
-    status = "Finish";
-  } else if (s_hour == 0 && s_minute < 1) {
-    status = "Heating";
-  }
-  char status_line[36];
-  snprintf(status_line, sizeof(status_line), "R %02d:%02d  %s",
-           remain_mins / 60, remain_mins % 60, status);
-  graphics_context_set_text_color(ctx, color_dim());
-  graphics_draw_text(ctx, status_line, fonts_get_system_font(FONT_KEY_GOTHIC_14),
-      GRect(content.origin.x, y, content.size.w, 18),
-      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-  y += 16 + gap;
 
-  // --- Weekday "print file" — flow after status, never flush to the bezel ---
+  // --- Weekday "print file" in its reserved bottom strip ---
   char file_line[28];
   snprintf(file_line, sizeof(file_line), "%s.GCO", weekday_name(s_wday));
-  const int file_h = 22;
-  int max_file_y = content.origin.y + content.size.h - file_h;
-  int file_y = y;
-  if (file_y < max_file_y) {
-    // Use leftover space, but stop short of the content floor.
-    file_y += (max_file_y - file_y) / 2;
-  }
-  if (file_y > max_file_y) {
-    file_y = max_file_y;
-  }
   graphics_context_set_text_color(ctx, color_fg());
   graphics_draw_text(ctx, file_line, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
       GRect(content.origin.x, file_y, content.size.w, file_h),
